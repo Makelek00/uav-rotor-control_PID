@@ -133,7 +133,7 @@ class OffboardControl(Node):
             self.engage_offboard_mode()
             self.arm()
         if  self.offboard_setpoint_counter > 10:
-            self.publish_actuator_motors(1.0 ,1.0 ,-1.0 ,-1.0)
+            self.publish_actuator_motors(1.0 ,1.0 ,1.0 ,1.0)
 
 
         # if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
