@@ -3,8 +3,8 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleLocalPosition, VehicleStatus, ActuatorMotors
-
+from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleLocalPosition, VehicleStatus, ActuatorMotors, VehicleAttitude, VehicleOdometry
+from scipy.spatial.transform import Rotation as R
 
 class OffboardControl(Node):
     """Node for controlling a vehicle in offboard mode."""
@@ -23,8 +23,8 @@ class OffboardControl(Node):
         # Create publishers
         self.offboard_control_mode_publisher = self.create_publisher(
             OffboardControlMode, '/fmu/in/offboard_control_mode', qos_profile)
-        # self.trajectory_setpoint_publisher = self.create_publisher(
-        #     TrajectorySetpoint, '/fmu/in/trajectory_setpoint', qos_profile)
+        self.trajectory_setpoint_publisher = self.create_publisher(
+            TrajectorySetpoint, '/fmu/in/trajectory_setpoint', qos_profile)
         self.vehicle_command_publisher = self.create_publisher(
             VehicleCommand, '/fmu/in/vehicle_command', qos_profile)
         self.actuator_motors_publisher = self.create_publisher(
@@ -35,13 +35,19 @@ class OffboardControl(Node):
             VehicleLocalPosition, '/fmu/out/vehicle_local_position', self.vehicle_local_position_callback, qos_profile)
         self.vehicle_status_subscriber = self.create_subscription(
             VehicleStatus, '/fmu/out/vehicle_status', self.vehicle_status_callback, qos_profile)
-
+        
+        self.vehicle_attitude_subscriber = self.create_subscription(
+            VehicleAttitude, '/fmu/out/vehicle_attitude', self.vehicle_attitude_callback, qos_profile)
+        
+        self.vehicle_odometry_subscriber = self.create_subscription(
+            VehicleOdometry, '/fmu/out/vehicle_odometry', self.vehicle_odometry_callback, qos_profile)
         # Initialize variables
         self.offboard_setpoint_counter = 0
         self.vehicle_local_position = VehicleLocalPosition()
         self.vehicle_status = VehicleStatus()
         self.takeoff_height = -5.0
-
+        self.vehicle_attitude = []
+        self.angular_velocity = []
         # Create a timer to publish control commands
         self.timer = self.create_timer(0.1, self.timer_callback)
 
@@ -52,6 +58,17 @@ class OffboardControl(Node):
     def vehicle_status_callback(self, vehicle_status):
         """Callback function for vehicle_status topic subscriber."""
         self.vehicle_status = vehicle_status
+
+    def vehicle_attitude_callback(self, vehicle_attitude: VehicleAttitude):
+        """Callback function for vehicle_attitude topic subscriber."""
+    
+        r = R.from_quat(vehicle_attitude.q)
+        self.vehicle_attitude = r.as_euler('zyx', degrees=True)
+
+    def vehicle_odometry_callback(self, vehicle_odometry: VehicleOdometry):
+        """Callback function for vehicle_odometry topic subscriber."""
+    
+        self.angular_velocity = vehicle_odometry.angular_velocity
 
     def arm(self):
         """Send an arm command to the vehicle."""
@@ -132,9 +149,12 @@ class OffboardControl(Node):
         if self.offboard_setpoint_counter == 10:
             self.engage_offboard_mode()
             self.arm()
-        if  self.offboard_setpoint_counter > 10:
-            self.publish_actuator_motors(1.0 ,1.0 ,1.0 ,1.0)
+        # if  self.offboard_setpoint_counter > 10: 
+        #     self.publish_actuator_motors(1.0 ,1.0 ,1.0 ,1.0)
 
+# TUTAJ SĄ KĄTY I PRĘDKOŚCI KĄTOWE!!!!!
+        print(self.vehicle_attitude)
+        print(self.angular_velocity)
 
         # if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
         #     self.publish_position_setpoint(0.0, 0.0, self.takeoff_height)
@@ -144,8 +164,8 @@ class OffboardControl(Node):
         #     exit(0)
 
 
-        if self.offboard_setpoint_counter < 11:
-            self.offboard_setpoint_counter += 1
+        # if self.offboard_setpoint_counter < 11:
+        #     self.offboard_setpoint_counter += 1
 
 
 def main(args=None) -> None:
