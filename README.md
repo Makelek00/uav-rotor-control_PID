@@ -182,3 +182,28 @@ xhost +local:docker
 ```
 
 Re-open the folder in the container and check that it is now working correctly.
+
+
+### Thrust matrix
+Constants used in thrust matrix can be found in:
+
+/PX4-Autopilot/Tools/simulation/gz/models/x500_base/model.sdf
+
+        <visual name="5010_motor_base_0">
+          <pose>0.174 0.174 .032 0 0 -.45</pose>
+          <geometry>
+            <mesh>
+              <scale>1 1 1</scale>
+              <uri>model://x500_base/meshes/5010Base.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <visual name="5010_motor_base_1">
+          <pose>-0.174 0.174 .032 0 0 -.45</pose>
+          <geometry>
+            <mesh>
+              <scale>1 1 1</scale>
+              <uri>model://x500_base/meshes/5010Base.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
