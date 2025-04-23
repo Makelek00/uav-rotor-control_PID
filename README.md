@@ -2,7 +2,7 @@
 
 
 ### Thrust matrix
-Constants used in thrust matrix can be found in:
+Constants used in thrust matrix (from article https://github.com/Makelek00/uav-rotor-control_PID/blob/mateo_control_motors/Multirotor_Aerial_Vehicles_Modeling_Estimation_and_Control_of_Quadrotor.pdf) can be found in:
 
 /PX4-Autopilot/Tools/simulation/gz/models/x500_base/model.sdf
 
