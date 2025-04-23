@@ -3,8 +3,8 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleLocalPosition, VehicleStatus, ActuatorMotors
-
+from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleLocalPosition, VehicleStatus
+import numpy as np
 
 class OffboardControl(Node):
     """Node for controlling a vehicle in offboard mode."""
@@ -23,12 +23,10 @@ class OffboardControl(Node):
         # Create publishers
         self.offboard_control_mode_publisher = self.create_publisher(
             OffboardControlMode, '/fmu/in/offboard_control_mode', qos_profile)
-        # self.trajectory_setpoint_publisher = self.create_publisher(
-        #     TrajectorySetpoint, '/fmu/in/trajectory_setpoint', qos_profile)
+        self.trajectory_setpoint_publisher = self.create_publisher(
+            TrajectorySetpoint, '/fmu/in/trajectory_setpoint', qos_profile)
         self.vehicle_command_publisher = self.create_publisher(
             VehicleCommand, '/fmu/in/vehicle_command', qos_profile)
-        self.actuator_motors_publisher = self.create_publisher(
-            ActuatorMotors, '/fmu/in/actuator_motors', qos_profile)
 
         # Create subscribers
         self.vehicle_local_position_subscriber = self.create_subscription(
@@ -79,13 +77,11 @@ class OffboardControl(Node):
     def publish_offboard_control_heartbeat_signal(self):
         """Publish the offboard control mode."""
         msg = OffboardControlMode()
-        msg.position = False
+        msg.position = True
         msg.velocity = False
         msg.acceleration = False
         msg.attitude = False
         msg.body_rate = False
-        msg.thrust_and_torque = False
-        msg.direct_actuator = True
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.offboard_control_mode_publisher.publish(msg)
 
@@ -117,14 +113,6 @@ class OffboardControl(Node):
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.vehicle_command_publisher.publish(msg)
 
-    def publish_actuator_motors(self, a: float, b: float, c: float, d: float):
-        """Publish actutator_motors."""
-        msg = ActuatorMotors()
-        msg.control = [a, b, c, d, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
-        self.get_logger().info(f"Publishing control {[a, b, c, d]}")
-        self.actuator_motors_publisher.publish(msg)
-
     def timer_callback(self) -> None:
         """Callback function for the timer."""
         self.publish_offboard_control_heartbeat_signal()
@@ -132,17 +120,13 @@ class OffboardControl(Node):
         if self.offboard_setpoint_counter == 10:
             self.engage_offboard_mode()
             self.arm()
-        if  self.offboard_setpoint_counter > 10:
-            self.publish_actuator_motors(1.0 ,1.0 ,-1.0 ,-1.0)
 
-
-        # if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
-        #     self.publish_position_setpoint(0.0, 0.0, self.takeoff_height)
+        if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
+            self.publish_position_setpoint(5.0, 5.0, self.takeoff_height)
 
         # elif self.vehicle_local_position.z <= self.takeoff_height:
         #     self.land()
         #     exit(0)
-
 
         if self.offboard_setpoint_counter < 11:
             self.offboard_setpoint_counter += 1
@@ -156,6 +140,24 @@ def main(args=None) -> None:
     offboard_control.destroy_node()
     rclpy.shutdown()
 
+
+ct = 8.54858e-06  # c_T
+cq = 8.06428e-05  # c_Q
+
+# Obliczenie d = sqrt(0.174^2 + 0.174^2)
+d = np.sqrt(0.174**2 + 0.174**2)
+
+# Macierz C z równania (8)
+C = np.array([
+    [ ct,      ct,       ct,      ct    ],
+    [ 0,       d*ct,     0,      -d*ct  ],
+    [-d*ct,    0,       d*ct,     0     ],
+    [-cq,      cq,      -cq,      cq    ]
+])
+
+print("d =", d)
+print("Macierz C:")
+print(C)
 
 if __name__ == '__main__':
     try:
