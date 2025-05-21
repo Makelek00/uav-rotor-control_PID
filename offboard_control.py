@@ -110,7 +110,7 @@ class OffboardControl(Node):
         """Publish the trajectory setpoint."""
         msg = TrajectorySetpoint()
         msg.position = [x, y, z]
-        msg.yaw = 1.57079  # (90 degree)
+        msg.yaw = -1.57079  # (90 degree)
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.trajectory_setpoint_publisher.publish(msg)
         self.get_logger().info(f"Publishing position setpoints {[x, y, z]}")
@@ -156,16 +156,15 @@ class OffboardControl(Node):
         print(self.vehicle_attitude)
         print(self.angular_velocity)
 
-        # if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
-        #     self.publish_position_setpoint(0.0, 0.0, self.takeoff_height)
+        if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
+            self.publish_position_setpoint(0.0, 0.0, self.takeoff_height)
 
-        # elif self.vehicle_local_position.z <= self.takeoff_height:
-        #     self.land()
-        #     exit(0)
+        elif self.vehicle_local_position.z <= self.takeoff_height:
+            self.land()
+            exit(0)
 
-
-        # if self.offboard_setpoint_counter < 11:
-        #     self.offboard_setpoint_counter += 1
+        if self.offboard_setpoint_counter < 11:
+            self.offboard_setpoint_counter += 1
 
 
 def main(args=None) -> None:

@@ -6,6 +6,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleLocalPosition, VehicleStatus, ActuatorMotors, VehicleAttitude, VehicleOdometry
 from scipy.spatial.transform import Rotation as R
+from geometry_msgs.msg import Vector3
 
 class AttitudePDController:
     
@@ -26,13 +27,20 @@ class AttitudePDController:
         """
 
         errors = [d - c for d, c in zip(desired_angles, current_angles)]
-        d_errors = [-w for w in angular_velocities]  # zamiast różniczki
+        for i in range(3):
+            if errors[i] > 180:
+                errors[i] -= 360
+            if errors[i] < -180:
+                errors[i] += 360
+        d_errors = [float(-w) for w in angular_velocities]  # zamiast różniczki
         moments = [
             self.kp[i] * errors[i] + self.kd[i] * d_errors[i]
             for i in range(3)
         ]
+
         print(f"errors: {errors} | d_errors: {d_errors}")
-        return moments
+
+        return moments, errors
 
 
 class OffboardControl(Node):
@@ -58,7 +66,10 @@ class OffboardControl(Node):
             VehicleCommand, '/fmu/in/vehicle_command', qos_profile)
         self.actuator_motors_publisher = self.create_publisher(
             ActuatorMotors, '/fmu/in/actuator_motors', qos_profile)
-        
+        self.moments = self.create_publisher(Vector3, 'moments', 10)
+        self.angles = self.create_publisher(Vector3, 'angles', 10)
+        self.errors = self.create_publisher(Vector3, 'errors', 10)
+
         # Create subscribers
         self.vehicle_local_position_subscriber = self.create_subscription(
             VehicleLocalPosition, '/fmu/out/vehicle_local_position', self.vehicle_local_position_callback, qos_profile)
@@ -78,7 +89,7 @@ class OffboardControl(Node):
         self.angular_velocity = []
         self.control_flag = 0
         # Create a timer to publish control commands
-        self.timer = self.create_timer(0.1, self.timer_callback)
+        self.timer = self.create_timer(0.005, self.timer_callback)
 
     def vehicle_attitude_callback(self, vehicle_attitude: VehicleAttitude):
         """Callback function for vehicle_attitude topic subscriber."""
@@ -150,6 +161,26 @@ class OffboardControl(Node):
         msg.timestamp = int(self.get_clock().now().nanoseconds / 1000)
         self.actuator_motors_publisher.publish(msg)
 
+    def publish_debug(self, moments, angles, errors):
+        msg = Vector3()
+        msg.x = moments[0]
+        msg.y = moments[1]
+        msg.z = moments[2]
+        self.moments.publish(msg)
+
+        msg2 = Vector3()
+        msg2.x = angles[0]
+        msg2.y = angles[1]
+        msg2.z = angles[2]
+        self.angles.publish(msg2)
+
+        msg3 = Vector3()
+        msg3.x = errors[0]
+        msg3.y = errors[1]
+        msg3.z = errors[2]
+        self.errors.publish(msg3)
+
+
     def publish_vehicle_command(self, command, **params) -> None:
         """Publish a vehicle command."""
         msg = VehicleCommand()
@@ -172,28 +203,29 @@ class OffboardControl(Node):
     def angle_controller(self, desired):
 
         controller = AttitudePDController(
-            kp=[0.03, 0.03, 0.09],  # roll, pitch, yaw
-            kd=[0.003, 0.003, 0.003])
+            kp=[2.0, 2.0, 2.0],  # roll, pitch, yaw
+            kd=[0.0, 0.0, 0.0])
 
-        moments = controller.update(desired, self.vehicle_attitude, self.angular_velocity)
+        moments, errors = controller.update(desired, self.vehicle_attitude, self.angular_velocity)
         print(f"angles: {self.vehicle_attitude}")
+        self.publish_debug(moments, self.vehicle_attitude, errors)
 
         print("Moment roll/pitch/yaw:", moments)
-        thrust = 18
+        thrust = 20
         final_vector = np.array([thrust, moments[0], moments[1], moments[2]])
         print(final_vector.shape)
         ct = 8.54858e-06  # c_T
         cq = 8.06428e-05  # c_Q
-
+        p=0.174
         # Obliczenie d = sqrt(0.174^2 + 0.174^2)
         d = np.sqrt(0.174**2 + 0.174**2)
 
         # Macierz C z równania (8)
         C = np.array([
             [ ct,      ct,       ct,      ct    ],
-            [ 0,       d*ct,     0,      -d*ct  ],
-            [-d*ct,    0,       d*ct,     0     ],
-            [-cq,      cq,      -cq,      cq    ]
+            [ p*ct,       -p*ct,     -p*ct,      p*ct  ],
+            [p*ct,       -p*ct,     p*ct,      -p*ct  ],
+            [-cq,      -cq,      cq,      cq    ]
         ])
         c_inv = np.linalg.inv(C)
         ang_vel_motor = c_inv @ final_vector.T
@@ -205,25 +237,22 @@ class OffboardControl(Node):
         """Callback function for the timer."""
         self.publish_offboard_control_heartbeat_signal()
 
-        if self.offboard_setpoint_counter == 10:
+        if self.offboard_setpoint_counter == 200:
             self.engage_offboard_mode()
             self.arm()
 
         # if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and self.control_flag==0:
         #     self.publish_position_setpoint(0.0, 0.0, self.takeoff_height)
-        if self.offboard_setpoint_counter < 20 and self.offboard_setpoint_counter > 10:
-            self.publish_actuator_motors([0.75, 0.75, 0.75, 0.75])
+        # if self.offboard_setpoint_counter < 400 and self.offboard_setpoint_counter > 200:
+        #     self.publish_actuator_motors([0.75, 0.75, 0.75, 0.75])
 
-        if self.offboard_setpoint_counter >= 20:
+        if self.offboard_setpoint_counter > 200:
             self.control_flag = 1
             print("change to control")
-            disered = [0, 0, 90]
+            disered = [0, 0, 80]
             ang_vel_motor_sqrt = self.angle_controller(disered)
             self.publish_actuator_motors(ang_vel_motor_sqrt)
-
-        if self.offboard_setpoint_counter < 21:
-            self.offboard_setpoint_counter += 1
-        print(self.offboard_setpoint_counter)
+        self.offboard_setpoint_counter += 1
 
 def main(args=None) -> None:
     print('Starting offboard control node...')
