@@ -2,18 +2,39 @@
 
 Just some notes to make sense of what was done.
 
+## Motor order
+
+When sending `ActuatorMotors` message, the order of rotors is pictured below.
+
+![screenshot with order](images/actuator_motors_order.jpg)
+
 ## Getting coefficients and other data from models
 
-We have a constant matrix $\Gamma$:
+Let's consider the following equations for moments on every axis:
 
-$$ \Gamma = \begin{bmatrix}
+![moments equations](images/moments.jpg)
+
+Written in matrix form (eq. 8 in the script):
+
+$$ \begin{bmatrix}
+T \\
+\tau_x \\
+\tau_y \\
+\tau_z 
+\end{bmatrix} = \begin{bmatrix}
 c_T & c_T & c_T & c_T \\
-0 & dc_T & 0 & -dc_T \\
--dc_T & 0 & dc_T & 0 \\
--c_Q & c_Q & -c_Q & c_Q 
-\end{bmatrix}  $$
+-pc_T & pc_T & pc_T & -pc_T \\
+-pc_T & pc_T & -pc_T & pc_T \\
+c_Q & c_Q & -c_Q & -c_Q 
+\end{bmatrix}
+\begin{bmatrix}
+{\omega_0}^2 \\
+{\omega_1}^2 \\
+{\omega_2}^2 \\
+{\omega_3}^2 
+\end{bmatrix} $$
 
-We can read the necessary $d$ (arm length), $c_T$ (thrust constant) and $c_Q$ (rotor drag coefficient) from models in official repos. In [x500/model.sdf](https://github.com/PX4/PX4-gazebo-models/blob/main/models/x500/model.sdf) we can find $c_T$ and $c_Q$:
+We can read the necessary $p$ (distance from axis, arm length times $\sqrt{2}$), $c_T$ (thrust constant) and $c_Q$ (rotor drag coefficient) from models in official repos. In [x500/model.sdf](https://github.com/PX4/PX4-gazebo-models/blob/main/models/x500/model.sdf) we can find $c_T$ and $c_Q$:
 
 ```xml
 ...
@@ -61,7 +82,7 @@ In [x500_base/model.sdf](https://github.com/PX4/PX4-gazebo-models/blob/main/mode
 ...
 ```
 
-The pose lets us calculate the arm length $d = \sqrt{0.174^2 + 0.174^2} \approx 0.246 \ \text{m} = 24.6 \ \text{cm}$.
+From the pose tag we can take the distance $p = 0.174 \ \text{m} = 17.4 \ \text{cm}$.
 
 ## Converting quaternions to RPY
 
@@ -74,3 +95,5 @@ The rotors spin in the direction defined in [x500/model.sdf](https://github.com/
 ## Frame conventions
 
 As stated in [PX4 Guide](https://docs.px4.io/v1.15/en/ros2/user_guide.html#ros-2-px4-frame-conventions), ROS2 and PX4 use different frame conventions, which means that some vectors may need to be rotated. It could be usefull to remember while declaring a setpoint.
+
+We also know from [VehicleAttitude page](https://docs.px4.io/v1.15/en/msg_docs/VehicleAttitude.html#vehicleattitude-uorb-message) that in PX4 quaternion has the order `q(w, x, y, z)` and that should be taken into account when doing any kind of conversion to RPY angles.

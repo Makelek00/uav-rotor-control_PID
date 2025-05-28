@@ -93,9 +93,9 @@ class OffboardControl(Node):
 
     def vehicle_attitude_callback(self, vehicle_attitude: VehicleAttitude):
         """Callback function for vehicle_attitude topic subscriber."""
-    
-        r = R.from_quat(vehicle_attitude.q)
-        self.vehicle_attitude = r.as_euler('zyx', degrees=True)
+
+        r = R.from_quat([vehicle_attitude.q[1], vehicle_attitude.q[2], vehicle_attitude.q[3], vehicle_attitude.q[0]])
+        self.vehicle_attitude = r.as_euler('xyz', degrees=True)
 
     def vehicle_odometry_callback(self, vehicle_odometry: VehicleOdometry):
         """Callback function for vehicle_odometry topic subscriber."""
@@ -203,7 +203,7 @@ class OffboardControl(Node):
     def angle_controller(self, desired):
 
         controller = AttitudePDController(
-            kp=[2.0, 2.0, 2.0],  # roll, pitch, yaw
+            kp=[0.2, 0.2, 0.2],  # roll, pitch, yaw
             kd=[0.0, 0.0, 0.0])
 
         moments, errors = controller.update(desired, self.vehicle_attitude, self.angular_velocity)
@@ -216,16 +216,16 @@ class OffboardControl(Node):
         print(final_vector.shape)
         ct = 8.54858e-06  # c_T
         cq = 8.06428e-05  # c_Q
-        p=0.174
+        p = 0.174
         # Obliczenie d = sqrt(0.174^2 + 0.174^2)
-        d = np.sqrt(0.174**2 + 0.174**2)
+        # d = np.sqrt(0.174**2 + 0.174**2)
 
         # Macierz C z równania (8)
         C = np.array([
-            [ ct,      ct,       ct,      ct    ],
-            [ p*ct,       -p*ct,     -p*ct,      p*ct  ],
-            [p*ct,       -p*ct,     p*ct,      -p*ct  ],
-            [-cq,      -cq,      cq,      cq    ]
+            [ct, ct, ct, ct],
+            [-p*ct, p*ct, p*ct, -p*ct],
+            [-p*ct, p*ct, -p*ct, p*ct],
+            [-cq, -cq, cq, cq]
         ])
         c_inv = np.linalg.inv(C)
         ang_vel_motor = c_inv @ final_vector.T
@@ -243,15 +243,16 @@ class OffboardControl(Node):
 
         # if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and self.control_flag==0:
         #     self.publish_position_setpoint(0.0, 0.0, self.takeoff_height)
-        # if self.offboard_setpoint_counter < 400 and self.offboard_setpoint_counter > 200:
-        #     self.publish_actuator_motors([0.75, 0.75, 0.75, 0.75])
+        if self.offboard_setpoint_counter < 400 and self.offboard_setpoint_counter > 200:
+            self.publish_actuator_motors([0.75, 0.75, 0.75, 0.75])
 
-        if self.offboard_setpoint_counter > 200:
+        if self.offboard_setpoint_counter > 401:
             self.control_flag = 1
             print("change to control")
-            disered = [0, 0, 80]
-            ang_vel_motor_sqrt = self.angle_controller(disered)
+            desired = [0, 0, 90]
+            ang_vel_motor_sqrt = self.angle_controller(desired)
             self.publish_actuator_motors(ang_vel_motor_sqrt)
+        
         self.offboard_setpoint_counter += 1
 
 def main(args=None) -> None:
