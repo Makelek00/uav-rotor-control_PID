@@ -163,7 +163,7 @@ cython_debug/
 
 # Additional data
 logs*/
-rosbags/
+rosbag*/
 
 # Additional programs
 *.AppImage
