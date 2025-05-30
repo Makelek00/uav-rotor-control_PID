@@ -95,7 +95,8 @@ class OffboardControl(Node):
         """Callback function for vehicle_attitude topic subscriber."""
 
         r = R.from_quat([vehicle_attitude.q[1], vehicle_attitude.q[2], vehicle_attitude.q[3], vehicle_attitude.q[0]])
-        self.vehicle_attitude = r.as_euler('xyz', degrees=True)
+        r = r.as_euler('ZXY', degrees=True)
+        self.vehicle_attitude = [r[1], r[2], r[0]]
 
     def vehicle_odometry_callback(self, vehicle_odometry: VehicleOdometry):
         """Callback function for vehicle_odometry topic subscriber."""
@@ -203,7 +204,7 @@ class OffboardControl(Node):
     def angle_controller(self, desired):
 
         controller = AttitudePDController(
-            kp=[0.2, 0.2, 0.2],  # roll, pitch, yaw
+            kp=[0.02, 0.02, 0.02],  # roll, pitch, yaw
             kd=[0.0, 0.0, 0.0])
 
         moments, errors = controller.update(desired, self.vehicle_attitude, self.angular_velocity)
@@ -224,8 +225,8 @@ class OffboardControl(Node):
         C = np.array([
             [ct, ct, ct, ct],
             [-p*ct, p*ct, p*ct, -p*ct],
-            [-p*ct, p*ct, -p*ct, p*ct],
-            [-cq, -cq, cq, cq]
+            [p*ct, -p*ct, p*ct, -p*ct],
+            [cq, cq, -cq, -cq]
         ])
         c_inv = np.linalg.inv(C)
         ang_vel_motor = c_inv @ final_vector.T
@@ -249,7 +250,7 @@ class OffboardControl(Node):
         if self.offboard_setpoint_counter > 401:
             self.control_flag = 1
             print("change to control")
-            desired = [0, 0, 90]
+            desired = [0, 0, 80]
             ang_vel_motor_sqrt = self.angle_controller(desired)
             self.publish_actuator_motors(ang_vel_motor_sqrt)
         

@@ -14,7 +14,7 @@ Let's consider the following equations for moments on every axis:
 
 ![moments equations](images/moments.jpg)
 
-Written in matrix form (eq. 8 in the script):
+Written in matrix form (eq. 8 in the script). In the code signs in third row $\tau_y$ are inverted, don't know why:
 
 $$ \begin{bmatrix}
 T \\
@@ -97,3 +97,7 @@ The rotors spin in the direction defined in [x500/model.sdf](https://github.com/
 As stated in [PX4 Guide](https://docs.px4.io/v1.15/en/ros2/user_guide.html#ros-2-px4-frame-conventions), ROS2 and PX4 use different frame conventions, which means that some vectors may need to be rotated. It could be usefull to remember while declaring a setpoint.
 
 We also know from [VehicleAttitude page](https://docs.px4.io/v1.15/en/msg_docs/VehicleAttitude.html#vehicleattitude-uorb-message) that in PX4 quaternion has the order `q(w, x, y, z)` and that should be taken into account when doing any kind of conversion to RPY angles.
+
+## Trajectory planning
+
+Useful python implementation: [toppra](https://github.com/hungpham2511/toppra).
