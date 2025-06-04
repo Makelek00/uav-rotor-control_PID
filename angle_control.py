@@ -7,9 +7,9 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleLocalPosition, VehicleStatus, ActuatorMotors, VehicleAttitude, VehicleOdometry
 from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import Vector3
-from Trajectory_control import TrajectoryController
+
 class AttitudePDController:
-    
+
     def __init__(self, kp, kd):
         """
         kp, kd: listy 3-elementowe [roll, pitch, yaw]
@@ -78,7 +78,7 @@ class OffboardControl(Node):
         self.vehicle_attitude_subscriber = self.create_subscription(
             VehicleAttitude, '/fmu/out/vehicle_attitude', self.vehicle_attitude_callback, qos_profile)
         self.position_control_subscriber = self.create_subscription(
-            Vector3, 'att_thrust_cmd', self.position_control_callback, qos_profile)
+            Vector3, 'att_thrust_cmd', self.position_control_callback, 10)
         
         self.vehicle_odometry_subscriber = self.create_subscription(
             VehicleOdometry, '/fmu/out/vehicle_odometry', self.vehicle_odometry_callback, qos_profile)
@@ -117,9 +117,9 @@ class OffboardControl(Node):
         self.vehicle_status = vehicle_status
 
     def position_control_callback(self, att_thrust_cmd):
-        self.thrust = att_thrust_cmd[2]
-        self.roll = att_thrust_cmd[0]
-        self.pitch = att_thrust_cmd[1]
+        self.thrust = att_thrust_cmd.z
+        self.roll = att_thrust_cmd.x
+        self.pitch = att_thrust_cmd.y
 
     def arm(self):
         """Send an arm command to the vehicle."""
@@ -269,8 +269,6 @@ def main(args=None) -> None:
     print('Starting offboard control node...')
     rclpy.init(args=args)
     offboard_control = OffboardControl()
-    position_control = TrajectoryController()
-    position_control.run()
     rclpy.spin(offboard_control)
     offboard_control.destroy_node()
     rclpy.shutdown()

@@ -42,6 +42,7 @@ import rclpy
 from geometry_msgs.msg import Vector3
 from px4_msgs.msg import VehicleLocalPosition, VehicleAttitude
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 
 
 class TrajectoryController(Node):
@@ -82,7 +83,7 @@ class TrajectoryController(Node):
         self.declare_parameter("wp_tol",             0.15)
         self.declare_parameter("Kp",                 [1.5, 1.5, 2.0])
         self.declare_parameter("Kd",                 [2.0, 2.0, 2.5])
-        self.declare_parameter("mass",               1.50)
+        self.declare_parameter("mass",               2.3)
         self.declare_parameter("g",                  9.81)
 
         # load parameters ----------------------------------------------------
@@ -117,17 +118,23 @@ class TrajectoryController(Node):
         self._current_wp: int = 0                   # index of active waypoint
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~ ROS interfaces ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
         self.create_subscription(
             VehicleLocalPosition,
             "/fmu/out/vehicle_local_position",
             self.pose_cb,
-            10,
+            qos_profile,
         )
         self.create_subscription(
             VehicleAttitude,
             "/fmu/out/vehicle_attitude",
             self.att_cb,
-            10,
+            qos_profile,
         )
         self.cmd_pub = self.create_publisher(Vector3, "att_thrust_cmd", 10)
 
@@ -143,7 +150,7 @@ class TrajectoryController(Node):
 
         # ---------- current state -------------------------------------
         p = np.array([msg.x, msg.y, msg.z])
-        v = np.array([msg.v_x, msg.v_y, msg.v_z])
+        v = np.array([msg.vx, msg.vy, msg.vz])
 
         # ---------- waypoint management -------------------------------
         target = np.array(self.waypoints[self._current_wp])
