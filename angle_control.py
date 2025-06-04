@@ -7,7 +7,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from px4_msgs.msg import OffboardControlMode, TrajectorySetpoint, VehicleCommand, VehicleLocalPosition, VehicleStatus, ActuatorMotors, VehicleAttitude, VehicleOdometry
 from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import Vector3
-
+from Trajectory_control import TrajectoryController
 class AttitudePDController:
     
     def __init__(self, kp, kd):
@@ -77,6 +77,8 @@ class OffboardControl(Node):
             VehicleStatus, '/fmu/out/vehicle_status', self.vehicle_status_callback, qos_profile)
         self.vehicle_attitude_subscriber = self.create_subscription(
             VehicleAttitude, '/fmu/out/vehicle_attitude', self.vehicle_attitude_callback, qos_profile)
+        self.position_control_subscriber = self.create_subscription(
+            Vector3, 'att_thrust_cmd', self.position_control_callback, qos_profile)
         
         self.vehicle_odometry_subscriber = self.create_subscription(
             VehicleOdometry, '/fmu/out/vehicle_odometry', self.vehicle_odometry_callback, qos_profile)
@@ -88,6 +90,9 @@ class OffboardControl(Node):
         self.vehicle_attitude = []
         self.angular_velocity = []
         self.control_flag = 0
+        self.thrust = 19.5
+        self.roll = 0
+        self.pitch = 0
         # Create a timer to publish control commands
         self.timer = self.create_timer(0.005, self.timer_callback)
 
@@ -110,6 +115,11 @@ class OffboardControl(Node):
     def vehicle_status_callback(self, vehicle_status):
         """Callback function for vehicle_status topic subscriber."""
         self.vehicle_status = vehicle_status
+
+    def position_control_callback(self, att_thrust_cmd):
+        self.thrust = att_thrust_cmd[2]
+        self.roll = att_thrust_cmd[0]
+        self.pitch = att_thrust_cmd[1]
 
     def arm(self):
         """Send an arm command to the vehicle."""
@@ -204,7 +214,7 @@ class OffboardControl(Node):
     def angle_controller(self, desired):
 
         controller = AttitudePDController(
-            kp=[0.02, 0.02, 0.02],  # roll, pitch, yaw
+            kp=[0.005, 0.005, 0.05],  # roll, pitch, yaw
             kd=[0.0, 0.0, 0.0])
 
         moments, errors = controller.update(desired, self.vehicle_attitude, self.angular_velocity)
@@ -212,8 +222,7 @@ class OffboardControl(Node):
         self.publish_debug(moments, self.vehicle_attitude, errors)
 
         print("Moment roll/pitch/yaw:", moments)
-        thrust = 20
-        final_vector = np.array([thrust, moments[0], moments[1], moments[2]])
+        final_vector = np.array([self.thrust, moments[0], moments[1], moments[2]])
         print(final_vector.shape)
         ct = 8.54858e-06  # c_T
         cq = 8.06428e-05  # c_Q
@@ -244,13 +253,13 @@ class OffboardControl(Node):
 
         # if self.vehicle_local_position.z > self.takeoff_height and self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and self.control_flag==0:
         #     self.publish_position_setpoint(0.0, 0.0, self.takeoff_height)
-        if self.offboard_setpoint_counter < 400 and self.offboard_setpoint_counter > 200:
-            self.publish_actuator_motors([0.75, 0.75, 0.75, 0.75])
+        # if self.offboard_setpoint_counter < 400 and self.offboard_setpoint_counter > 200:
+        #     self.publish_actuator_motors([0.75, 0.75, 0.75, 0.75])
 
-        if self.offboard_setpoint_counter > 401:
+        if self.offboard_setpoint_counter > 201:
             self.control_flag = 1
             print("change to control")
-            desired = [0, 0, 80]
+            desired = [self.roll, self.pitch, 80]
             ang_vel_motor_sqrt = self.angle_controller(desired)
             self.publish_actuator_motors(ang_vel_motor_sqrt)
         
@@ -260,6 +269,8 @@ def main(args=None) -> None:
     print('Starting offboard control node...')
     rclpy.init(args=args)
     offboard_control = OffboardControl()
+    position_control = TrajectoryController()
+    position_control.run()
     rclpy.spin(offboard_control)
     offboard_control.destroy_node()
     rclpy.shutdown()
